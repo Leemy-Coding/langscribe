@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}Community Library{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+  <h1 class="mb-4">📚 Community Library</h1>
+
+  <!-- Upload Form -->
+  <form action="{{ url_for('upload') }}" method="POST" enctype="multipart/form-data" class="mb-4">
+    <div class="mb-3">
+      <label for="title" class="form-label">Title</label>
+      <input type="text" name="title" class="form-control" placeholder="Enter a title for your upload" required>
+    </div>
+
+    <div class="mb-3">
+      <label for="file" class="form-label">Upload a text file</label>
+      <input type="file" name="file" class="form-control" accept=".txt" required>
+    </div>
+
+    <div class="mb-3">
+      <label for="author" class="form-label">Author</label>
+      <input type="text" name="author" class="form-control" placeholder="e.g., Beowulf Poet" required>
+    </div>
+
+    <button class="btn btn-primary" type="submit">Upload</button>
+  </form>
+
+  {% if uploads %}
+    <ul class="list-group">
+      {% for upload in uploads %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          <div>
+            <strong>{{ upload.title }}</strong><br>
+            <small>🖋 <em>{{ upload.author }}</em> &mdash; Uploaded by {{ upload.uploader }}</small>
+          </div>
+          <div class="d-flex gap-2">
+            <a href="{{ url_for('read', filename=upload.filename) }}" class="btn btn-sm btn-success">📖 Read</a>
+            {% if current_user.is_authenticated and current_user.is_admin %}
+              <form action="{{ url_for('delete_upload', upload_id=upload.id) }}" method="POST" style="display: inline;">
+                <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete this upload?')">🗑 Delete</button>
+              </form>
+            {% endif %}
+          </div>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="text-muted">No community texts have been uploaded yet.</p>
+  {% endif %}
+</div>
+{% endblock %}

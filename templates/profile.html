@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block title %}Profile - {{ current_user.username }}{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+  <h1>👤 Profile</h1>
+  <div class="card mb-4" style="max-width: 500px;">
+    <div class="card-body">
+      <h5 class="card-title">{{ current_user.username }}</h5>
+      <p class="card-text"><strong>Email:</strong> {{ current_user.email }}</p>
+    </div>
+  </div>
+
+  <h3>Your Vocabulary Stats</h3>
+  <ul class="list-group" style="max-width: 500px;">
+    <li class="list-group-item d-flex justify-content-between align-items-center">
+      Known Words
+      <span class="badge bg-primary rounded-pill">{{ known_words_count }}</span>
+    </li>
+    <li class="list-group-item d-flex justify-content-between align-items-center">
+      Words with Meanings
+      <span class="badge bg-secondary rounded-pill">{{ meanings_count }}</span>
+    </li>
+  </ul>
+</div>
+{% endblock %}

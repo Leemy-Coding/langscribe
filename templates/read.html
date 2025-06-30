@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<a href="{{ url_for('community') }}" class="btn btn-outline-primary mb-3">← Back to Community</a>
+<h2>{{ title }}</h2>
+
+<div class="mt-3 mb-5">
+    {% for word in text.split() %}
+        {% set clean_word = word.strip('.,!?:;"\'()[]') %}
+        {% set lower_word = clean_word|lower %}
+        {% if lower_word in word_meanings %}
+            <span class="word known-word" title="{{ word_meanings[lower_word] }}" onclick="editWord('{{ lower_word }}')">{{ word }}</span>
+        {% else %}
+            <span class="word" onclick="editWord('{{ lower_word }}')">{{ word }}</span>
+        {% endif %}
+    {% endfor %}
+</div>
+
+<!-- Word Meaning Editor -->
+<div id="editor" style="display:none;" class="card p-3">
+    <h5>Edit Meaning for: <span id="edit-word"></span></h5>
+    <form method="POST" action="{{ url_for('update_meaning') }}">
+        <input type="hidden" name="word" id="word-input">
+        <input type="hidden" name="filename" value="{{ filename }}">
+        <textarea name="meaning" id="meaning-input" class="form-control mb-2" rows="2" placeholder="Enter meaning..."></textarea>
+        <button class="btn btn-success" type="submit">Save</button>
+        <button class="btn btn-secondary" type="button" onclick="hideEditor()">Cancel</button>
+    </form>
+</div>
+
+<style>
+.word {
+    cursor: pointer;
+    padding: 0 2px;
+}
+.word:hover {
+    background-color: #f0f0f0;
+}
+.known-word {
+    background-color: #fff3b0;
+    border-bottom: 1px dotted #f0ad4e;
+    cursor: pointer;
+}
+.known-word:hover {
+    background-color: #ffe680;
+}
+</style>
+
+<script>
+const meanings = {{ word_meanings | tojson | safe }};
+
+function editWord(word) {
+    document.getElementById('editor').style.display = 'block';
+    document.getElementById('edit-word').textContent = word;
+    document.getElementById('word-input').value = word;
+    document.getElementById('meaning-input').value = meanings[word] || '';
+    document.getElementById('meaning-input').focus();
+}
+
+function hideEditor() {
+    document.getElementById('editor').style.display = 'none';
+}
+</script>
+{% endblock %}
