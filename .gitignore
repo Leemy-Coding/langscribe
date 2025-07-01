@@ -1,0 +1,36 @@
+# Byte-compiled / cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+
+# Environment variables
+.env
+
+# Flask/Migrate stuff
+instance/
+migrations/versions/__pycache__/
+*.db
+*.sqlite3
+
+# Uploads and user-generated content
+uploads/
+*.log
+
+# IDE/editor folders and files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# Render-specific (optional, if needed)
+render.yaml
+
+# Pytest cache
+.pytest_cache/

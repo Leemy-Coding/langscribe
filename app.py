@@ -1,25 +1,29 @@
 from flask import Flask, render_template, request, session, redirect, url_for, flash, abort
-from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
-from werkzeug.security import generate_password_hash, check_password_hash
-from flask_login import LoginManager, login_user, login_required, logout_user, current_user, UserMixin
+from flask_login import LoginManager, login_user, login_required, logout_user, current_user
 from werkzeug.utils import secure_filename
 from functools import wraps
 import os, re, uuid
 
+from dotenv import load_dotenv
+load_dotenv()
+
+from models import db, User, Meaning, KnownWord, Upload
+
 # --- App setup ---
 app = Flask(__name__)
-app.secret_key = "supersecretkey"
+app.secret_key = os.getenv("SECRET_KEY", "supersecretkey")
 
 # --- Config ---
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///vocab.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = 'uploads'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 # --- Extensions ---
-db = SQLAlchemy(app)
+db.init_app(app)
 migrate = Migrate(app, db)
+
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
@@ -31,41 +35,6 @@ def admin_required(f):
             abort(403)
         return f(*args, **kwargs)
     return decorated_function
-
-# --- Models ---
-class User(UserMixin, db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
-    password_hash = db.Column(db.String(128), nullable=False)
-    is_admin = db.Column(db.Boolean, default=False)
-
-    meanings = db.relationship('Meaning', backref='user', lazy=True)
-    known_words = db.relationship('KnownWord', backref='user', lazy=True)
-
-    def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
-
-    def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
-
-class Meaning(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    word = db.Column(db.String(100), nullable=False)
-    meaning = db.Column(db.Text, nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-
-class KnownWord(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    word = db.Column(db.String(100), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-
-class Upload(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    filename = db.Column(db.String(200), nullable=False)
-    title = db.Column(db.String(200), nullable=False)  # NEW title field
-    author = db.Column(db.String(100), nullable=False)
-    uploader = db.Column(db.String(100), nullable=False)
 
 # --- User loader ---
 @login_manager.user_loader
@@ -136,7 +105,7 @@ def community():
 @login_required
 def upload():
     file = request.files.get('file')
-    title = request.form.get('title', '').strip()  # NEW
+    title = request.form.get('title', '').strip()
     author = request.form.get('author', '').strip()
     uploader = current_user.username
 
