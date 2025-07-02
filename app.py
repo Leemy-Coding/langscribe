@@ -233,6 +233,12 @@ def profile():
                            known_words_count=len(current_user.known_words),
                            meanings_count=len(current_user.meanings))
 
+@app.route('/admin')
+@admin_required
+def admin_panel():
+    uploads = Upload.query.all()
+    return render_template('admin.html', uploads=uploads)
+
 # --- Do NOT use db.create_all() when using Flask-Migrate ---
 if __name__ == '__main__':
     app.run(debug=True)
