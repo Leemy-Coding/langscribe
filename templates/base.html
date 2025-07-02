@@ -50,6 +50,14 @@
     </div>
   </nav>
 
+  {# DEBUGGING ONLY — REMOVE BEFORE DEPLOYMENT #}
+  {% if current_user.is_authenticated %}
+    <div class="container mt-2 text-muted small">
+      Logged in as: {{ current_user.username }} |
+      Admin: {{ current_user.is_admin }}
+    </div>
+  {% endif %}
+
   <main class="container mt-4">
     {% with messages = get_flashed_messages() %}
       {% if messages %}
