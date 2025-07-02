@@ -24,11 +24,13 @@ class Meaning(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     word = db.Column(db.String(100), nullable=False)
     meaning = db.Column(db.Text, nullable=False)
+    language = db.Column(db.String(50), nullable=False)  # NEW
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
 class KnownWord(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     word = db.Column(db.String(100), nullable=False)
+    language = db.Column(db.String(50), nullable=False)  # NEW
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
 class Upload(db.Model):
@@ -37,3 +39,4 @@ class Upload(db.Model):
     title = db.Column(db.String(200), nullable=False)
     author = db.Column(db.String(100), nullable=False)
     uploader = db.Column(db.String(100), nullable=False)
+    language = db.Column(db.String(50), nullable=True)  # NEW

@@ -53,6 +53,12 @@ def tokenize(text):
 def index():
     return render_template('index.html')
 
+from datetime import datetime
+
+@app.context_processor
+def inject_now():
+    return {'current_year': datetime.now().year}
+
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
@@ -99,16 +105,111 @@ def logout():
 @app.route('/community')
 def community():
     uploads = Upload.query.all()
-    return render_template('community.html', uploads=uploads)
+
+    ALLOWED_LANGUAGES = [
+
+        # Germanic Languages
+        'Dutch', 'English', 'German', 'Icelandic', 'Norwegian', 'Old English', 'Swedish',
+
+        # Romance Languages
+        'French', 'Italian', 'Latin', 'Portuguese', 'Romanian', 'Spanish',
+
+        # Celtic Languages
+        'Breton', 'Irish', 'Welsh',
+
+        # Slavic Languages
+        'Polish', 'Serbian', 'Slovenian',
+
+        # Indo-Aryan Languages
+        'Bengali', 'Hindi', 'Urdu',
+
+        # Semitic Languages
+        'Modern Standard Arabic',
+
+        # Turkic Languages
+        'Turkish',
+
+        # Sino-Tibetan Languages
+        'Mandarin',
+
+        # Japonic Languages
+        'Japanese',
+
+        # Koreanic Languages
+        'Korean',
+
+        # Niger-Congo Languages
+        'Hausa', 'Swahili', 'Xhosa',
+
+        # Creoles / Pidgins
+        'Naija', 'Nigerian',
+
+        # Austronesian Languages
+        'Indonesian',
+
+        # Other / Unclassified
+        'Armenian', 'Guarani'
+    ]
+
+    return render_template('community.html', uploads=uploads, allowed_languages=ALLOWED_LANGUAGES)
 
 @app.route('/upload', methods=['POST'])
 @login_required
 def upload():
+    # Grab form data
     file = request.files.get('file')
     title = request.form.get('title', '').strip()
     author = request.form.get('author', '').strip()
+    language = request.form.get('language', '').strip()
     uploader = current_user.username
 
+    # Define allowed languages
+    ALLOWED_LANGUAGES = [
+
+        # Germanic Languages
+        'Dutch', 'English', 'German', 'Icelandic', 'Norwegian', 'Old English', 'Swedish',
+
+        # Romance Languages
+        'French', 'Italian', 'Latin', 'Portuguese', 'Romanian', 'Spanish',
+
+        # Celtic Languages
+        'Breton', 'Irish', 'Welsh',
+
+        # Slavic Languages
+        'Polish', 'Serbian', 'Slovenian',
+
+        # Indo-Aryan Languages
+        'Bengali', 'Hindi', 'Urdu',
+
+        # Semitic Languages
+        'Modern Standard Arabic',
+
+        # Turkic Languages
+        'Turkish',
+
+        # Sino-Tibetan Languages
+        'Mandarin',
+
+        # Japonic Languages
+        'Japanese',
+
+        # Koreanic Languages
+        'Korean',
+
+        # Niger-Congo Languages
+        'Hausa', 'Swahili', 'Xhosa',
+
+        # Creoles / Pidgins
+        'Naija', 'Nigerian',
+
+        # Austronesian Languages
+        'Indonesian',
+
+        # Other / Unclassified
+        'Armenian', 'Guarani'
+    ]
+
+    # Validation checks
     if not file or not allowed_file(file.filename):
         flash("Invalid file type. Only .txt allowed.")
         return redirect(url_for('community'))
@@ -121,17 +222,28 @@ def upload():
         flash("Author field is required.")
         return redirect(url_for('community'))
 
+    if language not in ALLOWED_LANGUAGES:
+        flash("Please select a valid language.")
+        return redirect(url_for('community'))
+
+    # Secure filename and save
     original_filename = secure_filename(file.filename)
     filename = f"{uuid.uuid4().hex}_{original_filename}"
-
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     file.save(filepath)
 
-    new_upload = Upload(filename=filename, title=title, author=author, uploader=uploader)  # Add title here
+    # Create and save upload record
+    new_upload = Upload(
+        filename=filename,
+        title=title,
+        author=author,
+        uploader=uploader,
+        language=language
+    )
     db.session.add(new_upload)
     db.session.commit()
 
-    flash(f"'{title}' by {author} uploaded by {uploader}!")
+    flash(f"'{title}' by {author} ({language}) uploaded by {uploader}!")
     return redirect(url_for('community'))
 
 @app.route('/read/<filename>')
@@ -157,7 +269,7 @@ def read(filename):
     return render_template('read.html', filename=filename, text=text, words=word_list,
                            known_words=known, word_meanings=meanings, title=upload.title)
 
-@app.route('/delete_upload/<int:upload_id>', methods=['POST'])
+@app.route('/delete_upload/<int:upload_id>', methods=['GET','POST'])
 @admin_required
 def delete_upload(upload_id):
     upload = Upload.query.get_or_404(upload_id)
