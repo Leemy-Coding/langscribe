@@ -266,8 +266,15 @@ def read(filename):
     known = {w.word for w in current_user.known_words}
     meanings = {m.word: m.meaning for m in current_user.meanings}
 
-    return render_template('read.html', filename=filename, text=text, words=word_list,
-                           known_words=known, word_meanings=meanings, title=upload.title)
+    return render_template('read.html',
+        filename=filename,
+        text=text,
+        words=word_list,
+        known_words=known,
+        word_meanings=meanings,
+        title=upload.title,
+        current_language=upload.language
+    )
 
 @app.route('/delete_upload/<int:upload_id>', methods=['GET','POST'])
 @admin_required
@@ -294,22 +301,36 @@ def mark_known(word):
 @app.route('/update_meaning', methods=['POST'])
 @login_required
 def update_meaning():
-    word = request.form['word'].lower()
-    meaning = request.form['meaning'].strip()
+    word = request.form.get('word', '').strip().lower()
+    meaning = request.form.get('meaning', '').strip()
     filename = request.form.get('filename')
     source = request.form.get('source')
+    language = request.form.get('language', '').strip()
 
-    existing = Meaning.query.filter_by(user_id=current_user.id, word=word).first()
+    if not word or not language:
+        flash("Both word and language are required to save the meaning.", "danger")
+        return redirect(request.referrer or url_for('index'))
+
+    # Check for existing entry for this user, word, and language
+    existing = Meaning.query.filter_by(user_id=current_user.id, word=word, language=language).first()
+
     if meaning:
         if existing:
             existing.meaning = meaning
         else:
-            db.session.add(Meaning(word=word, meaning=meaning, user_id=current_user.id))
+            new_meaning = Meaning(
+                word=word,
+                meaning=meaning,
+                language=language,
+                user_id=current_user.id
+            )
+            db.session.add(new_meaning)
     elif existing:
         db.session.delete(existing)
 
     db.session.commit()
 
+    # Redirect back to where user came from
     if filename:
         return redirect(url_for('read', filename=filename))
     elif source == 'library':
@@ -319,12 +340,32 @@ def update_meaning():
 @app.route('/library')
 @login_required
 def library():
-    known = {w.word for w in current_user.known_words}
+    from collections import defaultdict
+
     meanings = Meaning.query.filter_by(user_id=current_user.id).all()
-    return render_template('library.html',
-                           words=[m.word for m in meanings],
-                           known_words=known,
-                           word_meanings={m.word: m.meaning for m in meanings})
+
+    words_by_language_unsorted = defaultdict(list)
+    word_meanings = {}
+
+    for m in meanings:
+        lang = m.language or "Unspecified"
+        words_by_language_unsorted[lang].append({
+            'word': m.word,
+            'meaning': m.meaning
+        })
+        word_meanings[m.word] = m.meaning
+
+    # Sort languages and words within each language
+    words_by_language = {
+        lang: sorted(entries, key=lambda x: x['word'])
+        for lang, entries in sorted(words_by_language_unsorted.items())
+    }
+
+    return render_template(
+        'library.html',
+        words_by_language=words_by_language,
+        word_meanings=word_meanings
+    )
 
 @app.route('/remove_word/<word>', methods=['POST'])
 @login_required

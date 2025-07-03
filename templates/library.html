@@ -7,54 +7,64 @@
   <a href="{{ url_for('index') }}" class="btn btn-outline-primary mb-3">← Back to Home</a>
   <h1>Word Library</h1>
 
-  <div class="mb-4">
-    {% if words %}
-      {% for word in words|sort %}
-        <div class="word-container" style="display:inline-flex; align-items:center; margin-right:8px; margin-bottom:6px;">
-          <span class="word badge {{ 'bg-success' if word in known_words else 'bg-warning text-dark' }}" 
-                style="cursor:pointer; padding:0 4px; margin:0 2px; display:inline-block;"
-                onclick="editWord('{{ word }}')">
-            {{ word }}
-          </span>
-          <form method="POST" action="{{ url_for('remove_word', word=word) }}" style="display:inline;">
-            <button type="submit" class="remove-btn" title="Remove word from library" aria-label="Remove {{ word }}" 
-                    style="border:none; background:transparent; color:#dc3545; font-weight:bold; font-size:1.2rem; line-height:1; cursor:pointer; padding:0 4px; margin-left:4px; user-select:none;">
-              ×
-            </button>
-          </form>
+  {% if words_by_language %}
+    {% for language, words in words_by_language.items() %}
+      <div class="card my-3">
+        <div class="card-header bg-primary text-white">
+          {{ language }}
         </div>
-      {% endfor %}
-    {% else %}
-      <p>No words in library yet.</p>
-    {% endif %}
-  </div>
+        <div class="card-body">
+          <div class="mb-2">
+            {% for item in words %}
+              <div class="word-container" style="display:inline-flex; align-items:center; margin-right:8px; margin-bottom:6px;">
+                <span class="word badge bg-warning text-dark"
+                      style="cursor:pointer; padding:0 4px; margin:0 2px; display:inline-block;"
+                      onclick="editWord('{{ item.word }}', '{{ language }}')">
+                  {{ item.word }}
+                </span>
+                <form method="POST" action="{{ url_for('remove_word', word=item.word) }}" style="display:inline;">
+                  <button type="submit" class="remove-btn" title="Remove word from library" aria-label="Remove {{ item.word }}"
+                          style="border:none; background:transparent; color:#dc3545; font-weight:bold; font-size:1.2rem; line-height:1; cursor:pointer; padding:0 4px; margin-left:4px; user-select:none;">
+                    ×
+                  </button>
+                </form>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  {% else %}
+    <p>No words in library yet.</p>
+  {% endif %}
 
   <!-- Word Meaning Editor -->
   <div id="editor" style="display:none;" class="card p-3">
-    <h5>Edit Meaning for: <span id="edit-word"></span></h5>
-    <form method="POST" action="{{ url_for('update_meaning') }}">
-      <input type="hidden" name="word" id="word-input" />
-      <input type="hidden" name="source" value="library">
-      <textarea name="meaning" id="meaning-input" class="form-control mb-2" rows="3" placeholder="Enter meaning..."></textarea>
-      <button class="btn btn-success" type="submit">Save</button>
-      <button class="btn btn-secondary" type="button" onclick="hideEditor()">Cancel</button>
-    </form>
+      <h5>Edit Meaning for: <span id="edit-word"></span></h5>
+      <form method="POST" action="{{ url_for('update_meaning') }}">
+          <input type="hidden" name="word" id="word-input">
+          <input type="hidden" name="language" id="language-input">
+          <textarea name="meaning" id="meaning-input" class="form-control mb-2" rows="2" placeholder="Enter meaning..."></textarea>
+          <button class="btn btn-success" type="submit">Save</button>
+          <button class="btn btn-secondary" type="button" onclick="hideEditor()">Cancel</button>
+      </form>
   </div>
+
+  <script>
+    const meanings = {{ word_meanings | tojson | safe }};
+
+    function editWord(word, language) {
+      document.getElementById('editor').style.display = 'block';
+      document.getElementById('edit-word').textContent = word;
+      document.getElementById('word-input').value = word;
+      document.getElementById('language-input').value = language;
+      document.getElementById('meaning-input').value = meanings[word] || '';
+      document.getElementById('meaning-input').focus();
+    }
+
+    function hideEditor() {
+      document.getElementById('editor').style.display = 'none';
+    }
+  </script>
 </div>
-
-<script>
-  const meanings = {{ word_meanings | tojson | safe }};
-
-  function editWord(word) {
-    document.getElementById('editor').style.display = 'block';
-    document.getElementById('edit-word').textContent = word;
-    document.getElementById('word-input').value = word;
-    document.getElementById('meaning-input').value = meanings[word] || '';
-    document.getElementById('meaning-input').focus();
-  }
-
-  function hideEditor() {
-    document.getElementById('editor').style.display = 'none';
-  }
-</script>
 {% endblock %}
