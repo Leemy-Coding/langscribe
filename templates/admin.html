@@ -11,7 +11,7 @@
             <th>Title</th>
             <th>Author</th>
             <th>Uploader</th>
-            <th>Filename</th>
+            <th>Language</th>
             <th>Actions</th>
         </tr>
     </thead>
@@ -21,7 +21,7 @@
             <td>{{ upload.title }}</td>
             <td>{{ upload.author }}</td>
             <td>{{ upload.uploader }}</td>
-            <td>{{ upload.filename }}</td>
+            <td>{{ upload.language }}</td>
             <td>
                 <form method="POST" action="{{ url_for('delete_upload', upload_id=upload.id) }}"
                       onsubmit="return confirm('Are you sure you want to delete this upload?');">

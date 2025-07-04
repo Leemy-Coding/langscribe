@@ -4,6 +4,7 @@ from flask_login import LoginManager, login_user, login_required, logout_user, c
 from werkzeug.utils import secure_filename
 from functools import wraps
 from dotenv import load_dotenv
+from docx import Document
 
 import os, re
 from datetime import datetime
@@ -43,6 +44,8 @@ ALLOWED_LANGUAGES = [
     'Armenian', 'Guarani'
 ]
 
+ALLOWED_REFERRERS = {'library', 'read'}
+
 # --- Admin Decorator ---
 def admin_required(f):
     @wraps(f)
@@ -58,8 +61,9 @@ def load_user(user_id):
     return db.session.get(User, int(user_id))
 
 # --- Utility Functions ---
+ALLOWED_EXTENSIONS = {'txt', 'docx'}
 def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() == 'txt'
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def tokenize(text):
     return re.findall(r'\b[a-zA-ZþÞðÐæÆǣǢāĀēĒīĪōŌūŪȳȲ]+\b', text.lower())
@@ -134,24 +138,25 @@ def upload():
     if not file or not allowed_file(file.filename):
         flash("Invalid file type. Only .txt allowed.")
         return redirect(url_for('community'))
-    if not title:
-        flash("Title is required.")
-        return redirect(url_for('community'))
-    if not author:
-        flash("Author field is required.")
-        return redirect(url_for('community'))
-    if language not in ALLOWED_LANGUAGES:
-        flash("Please select a valid language.")
+    if not title or not author or language not in ALLOWED_LANGUAGES:
+        flash("Please fil out all required fields.")
         return redirect(url_for('community'))
 
     try:
-        content = file.read().decode('utf-8', errors='replace')
-    except Exception:
-        flash("There was a problem reading the file.")
+        if file.filename.lower().endswith('.txt'):
+            content = file.read().decode('utf-8', errors='replace')
+        elif file.filename.lower().endswith('docx'):
+            doc = Document(file)
+            content = "\n".join([p.text for p in doc.paragraphs if p.text.strip()])
+        else:
+            flash("Unsupported file format.")
+            return redirect(url_for('community'))
+    except Exception as e:
+        flash("There was a probem reading the file.")
         return redirect(url_for('community'))
 
     new_file = File(
-        id=str(uuid4()),
+        id=uuid4(),
         title=title,
         author=author,
         uploader=uploader,
@@ -162,7 +167,7 @@ def upload():
     db.session.add(new_file)
     db.session.commit()
 
-    flash(f"'{title}' by {author} ({language}) uploaded by {uploader}!")
+    flash(f"'{title}' by {author} in ({language}) uploaded by {uploader}!")
     return redirect(url_for('community'))
 
 @app.route('/read/file/<uuid:id>')
@@ -201,18 +206,22 @@ def delete_upload(upload_id):
 @login_required
 def mark_known(word):
     word = word.lower()
+    referrer = request.args.get('referrer')
     if not KnownWord.query.filter_by(user_id=current_user.id, word=word).first():
         db.session.add(KnownWord(word=word, user_id=current_user.id))
         db.session.commit()
-    return redirect(request.referrer or url_for('index'))
+
+    if referrer in ALLOWED_REFERRERS:
+        return redirect(url_for(referrer))
+    return redirect(url_for('index'))
 
 @app.route('/update_meaning', methods=['POST'])
 @login_required
 def update_meaning():
     word = request.form.get('word', '').strip().lower()
     meaning = request.form.get('meaning', '').strip()
-    file_id = request.form.get('file_id')
-    source = request.form.get('source')
+    id = request.form.get('id')
+    referrer = request.form.get('referrer')
     language = request.form.get('language', '').strip()
 
     if not word or not language:
@@ -231,10 +240,11 @@ def update_meaning():
 
     db.session.commit()
 
-    if file_id:
-        return redirect(url_for('read', file_id=file_id))
-    elif source == 'library':
+    if referrer == 'read' and id:
+        return redirect(url_for('read', id=id))
+    elif referrer == 'library':
         return redirect(url_for('library'))
+
     return redirect(url_for('index'))
 
 @app.route('/library')

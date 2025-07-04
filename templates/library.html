@@ -44,6 +44,7 @@
       <form method="POST" action="{{ url_for('update_meaning') }}">
           <input type="hidden" name="word" id="word-input">
           <input type="hidden" name="language" id="language-input">
+          <input type="hidden" name="referrer" value="library">
           <textarea name="meaning" id="meaning-input" class="form-control mb-2" rows="2" placeholder="Enter meaning..."></textarea>
           <button class="btn btn-success" type="submit">Save</button>
           <button class="btn btn-secondary" type="button" onclick="hideEditor()">Cancel</button>
