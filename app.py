@@ -169,7 +169,7 @@ def upload():
     db.session.commit()
 
     flash(f"'{title}' by {author} in ({language}) uploaded by {uploader}!")
-    return redirect(url_for('community'))
+    return redirect(url_for('community'), allowed_extensions)
 
 @app.route('/read/file/<uuid:id>')
 @login_required
