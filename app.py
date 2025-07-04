@@ -134,6 +134,7 @@ def upload():
     author = request.form.get('author', '').strip()
     language = request.form.get('language', '').strip()
     uploader = current_user.username
+    allowed_extensions = ",".join(f".{ext}" for ext in ALLOWED_EXTENSIONS)
 
     if not file or not allowed_file(file.filename):
         flash("Invalid file type. Only .txt allowed.")
