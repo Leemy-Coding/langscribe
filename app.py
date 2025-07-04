@@ -1,33 +1,49 @@
-from flask import Flask, render_template, request, session, redirect, url_for, flash, abort
+from flask import Flask, render_template, request, redirect, url_for, flash, abort
 from flask_migrate import Migrate
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user
 from werkzeug.utils import secure_filename
 from functools import wraps
-import os, re, uuid
-
 from dotenv import load_dotenv
+
+import os, re
+from datetime import datetime
+from collections import defaultdict
+
 load_dotenv()
 
-from models import db, User, Meaning, KnownWord, Upload
+from models import db, User, Meaning, KnownWord, File
 
-# --- App setup ---
+# --- App Setup ---
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "supersecretkey")
-
-# --- Config ---
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('SQLALCHEMY_DATABASE_URI') or os.environ.get('DATABASE_URL')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI') or os.getenv('DATABASE_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['UPLOAD_FOLDER'] = 'uploads'
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 # --- Extensions ---
 db.init_app(app)
 migrate = Migrate(app, db)
-
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
-# --- Admin decorator ---
+# --- Constants ---
+ALLOWED_LANGUAGES = [
+    'Dutch', 'English', 'German', 'Icelandic', 'Norwegian', 'Old English', 'Swedish',
+    'French', 'Italian', 'Latin', 'Portuguese', 'Romanian', 'Spanish',
+    'Breton', 'Irish', 'Welsh',
+    'Polish', 'Serbian', 'Slovenian',
+    'Bengali', 'Hindi', 'Urdu',
+    'Modern Standard Arabic',
+    'Turkish',
+    'Mandarin',
+    'Japanese',
+    'Korean',
+    'Hausa', 'Swahili', 'Xhosa',
+    'Naija', 'Nigerian',
+    'Indonesian',
+    'Armenian', 'Guarani'
+]
+
+# --- Admin Decorator ---
 def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -36,12 +52,12 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# --- User loader ---
+# --- User Loader ---
 @login_manager.user_loader
 def load_user(user_id):
-    return db.session.get(User, int(user_id))  # Instead of User.query.get
+    return db.session.get(User, int(user_id))
 
-# --- Utility functions ---
+# --- Utility Functions ---
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() == 'txt'
 
@@ -52,8 +68,6 @@ def tokenize(text):
 @app.route('/')
 def index():
     return render_template('index.html')
-
-from datetime import datetime
 
 @app.context_processor
 def inject_now():
@@ -69,7 +83,6 @@ def register():
         if User.query.filter_by(username=username).first():
             flash("Username already taken")
             return redirect(url_for('register'))
-
         if User.query.filter_by(email=email).first():
             flash("Email already registered")
             return redirect(url_for('register'))
@@ -104,189 +117,84 @@ def logout():
 
 @app.route('/community')
 def community():
-    uploads = Upload.query.all()
-
-    ALLOWED_LANGUAGES = [
-
-        # Germanic Languages
-        'Dutch', 'English', 'German', 'Icelandic', 'Norwegian', 'Old English', 'Swedish',
-
-        # Romance Languages
-        'French', 'Italian', 'Latin', 'Portuguese', 'Romanian', 'Spanish',
-
-        # Celtic Languages
-        'Breton', 'Irish', 'Welsh',
-
-        # Slavic Languages
-        'Polish', 'Serbian', 'Slovenian',
-
-        # Indo-Aryan Languages
-        'Bengali', 'Hindi', 'Urdu',
-
-        # Semitic Languages
-        'Modern Standard Arabic',
-
-        # Turkic Languages
-        'Turkish',
-
-        # Sino-Tibetan Languages
-        'Mandarin',
-
-        # Japonic Languages
-        'Japanese',
-
-        # Koreanic Languages
-        'Korean',
-
-        # Niger-Congo Languages
-        'Hausa', 'Swahili', 'Xhosa',
-
-        # Creoles / Pidgins
-        'Naija', 'Nigerian',
-
-        # Austronesian Languages
-        'Indonesian',
-
-        # Other / Unclassified
-        'Armenian', 'Guarani'
-    ]
-
+    uploads = File.query.all()
     return render_template('community.html', uploads=uploads, allowed_languages=ALLOWED_LANGUAGES)
+
+from uuid import uuid4
 
 @app.route('/upload', methods=['POST'])
 @login_required
 def upload():
-    # Grab form data
     file = request.files.get('file')
     title = request.form.get('title', '').strip()
     author = request.form.get('author', '').strip()
     language = request.form.get('language', '').strip()
     uploader = current_user.username
 
-    # Define allowed languages
-    ALLOWED_LANGUAGES = [
-
-        # Germanic Languages
-        'Dutch', 'English', 'German', 'Icelandic', 'Norwegian', 'Old English', 'Swedish',
-
-        # Romance Languages
-        'French', 'Italian', 'Latin', 'Portuguese', 'Romanian', 'Spanish',
-
-        # Celtic Languages
-        'Breton', 'Irish', 'Welsh',
-
-        # Slavic Languages
-        'Polish', 'Serbian', 'Slovenian',
-
-        # Indo-Aryan Languages
-        'Bengali', 'Hindi', 'Urdu',
-
-        # Semitic Languages
-        'Modern Standard Arabic',
-
-        # Turkic Languages
-        'Turkish',
-
-        # Sino-Tibetan Languages
-        'Mandarin',
-
-        # Japonic Languages
-        'Japanese',
-
-        # Koreanic Languages
-        'Korean',
-
-        # Niger-Congo Languages
-        'Hausa', 'Swahili', 'Xhosa',
-
-        # Creoles / Pidgins
-        'Naija', 'Nigerian',
-
-        # Austronesian Languages
-        'Indonesian',
-
-        # Other / Unclassified
-        'Armenian', 'Guarani'
-    ]
-
-    # Validation checks
     if not file or not allowed_file(file.filename):
         flash("Invalid file type. Only .txt allowed.")
         return redirect(url_for('community'))
-
     if not title:
         flash("Title is required.")
         return redirect(url_for('community'))
-
     if not author:
         flash("Author field is required.")
         return redirect(url_for('community'))
-
     if language not in ALLOWED_LANGUAGES:
         flash("Please select a valid language.")
         return redirect(url_for('community'))
 
-    # Secure filename and save
-    original_filename = secure_filename(file.filename)
-    filename = f"{uuid.uuid4().hex}_{original_filename}"
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    file.save(filepath)
+    try:
+        content = file.read().decode('utf-8', errors='replace')
+    except Exception:
+        flash("There was a problem reading the file.")
+        return redirect(url_for('community'))
 
-    # Create and save upload record
-    new_upload = Upload(
-        filename=filename,
+    new_file = File(
+        id=str(uuid4()),
         title=title,
         author=author,
         uploader=uploader,
-        language=language
+        language=language,
+        content=content,
+        user_id=current_user.id
     )
-    db.session.add(new_upload)
+    db.session.add(new_file)
     db.session.commit()
 
     flash(f"'{title}' by {author} ({language}) uploaded by {uploader}!")
     return redirect(url_for('community'))
 
-@app.route('/read/<filename>')
+@app.route('/read/file/<uuid:id>')
 @login_required
-def read(filename):
-    upload = Upload.query.filter_by(filename=filename).first()
-    if not upload:
-        return "File not found", 404
+def read(id):
+    file_entry = File.query.get_or_404(id)
 
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    if not os.path.exists(filepath):
-        return "File not found", 404
-
-    with open(filepath, 'r', encoding='utf-8') as f:
-        text = f.read()
-
+    text = file_entry.content
     words = tokenize(text)
     word_list = list(dict.fromkeys(words))
 
-    known = {w.word for w in current_user.known_words}
-    meanings = {m.word: m.meaning for m in current_user.meanings}
+    known_words = {w.word for w in current_user.known_words}
+    word_meanings = {m.word: m.meaning for m in current_user.meanings}
 
-    return render_template('read.html',
-        filename=filename,
+    return render_template(
+        'read.html',
+        id=id,
         text=text,
         words=word_list,
-        known_words=known,
-        word_meanings=meanings,
-        title=upload.title,
-        current_language=upload.language
+        known_words=known_words,
+        word_meanings=word_meanings,
+        title=file_entry.title,
+        current_language=file_entry.language
     )
 
-@app.route('/delete_upload/<int:upload_id>', methods=['GET','POST'])
+@app.route('/delete_upload/<uuid:upload_id>', methods=['GET', 'POST'])
 @admin_required
 def delete_upload(upload_id):
-    upload = Upload.query.get_or_404(upload_id)
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], upload.filename)
-    if os.path.exists(filepath):
-        os.remove(filepath)
-
-    db.session.delete(upload)
+    file_entry = File.query.get_or_404(upload_id)
+    db.session.delete(file_entry)
     db.session.commit()
-    flash(f"'{upload.filename}' has been deleted.")
+    flash(f"'{file_entry.title}' has been deleted.")
     return redirect(url_for('community'))
 
 @app.route('/mark_known/<word>')
@@ -303,7 +211,7 @@ def mark_known(word):
 def update_meaning():
     word = request.form.get('word', '').strip().lower()
     meaning = request.form.get('meaning', '').strip()
-    filename = request.form.get('filename')
+    file_id = request.form.get('file_id')
     source = request.form.get('source')
     language = request.form.get('language', '').strip()
 
@@ -311,28 +219,20 @@ def update_meaning():
         flash("Both word and language are required to save the meaning.", "danger")
         return redirect(request.referrer or url_for('index'))
 
-    # Check for existing entry for this user, word, and language
     existing = Meaning.query.filter_by(user_id=current_user.id, word=word, language=language).first()
 
     if meaning:
         if existing:
             existing.meaning = meaning
         else:
-            new_meaning = Meaning(
-                word=word,
-                meaning=meaning,
-                language=language,
-                user_id=current_user.id
-            )
-            db.session.add(new_meaning)
+            db.session.add(Meaning(word=word, meaning=meaning, language=language, user_id=current_user.id))
     elif existing:
         db.session.delete(existing)
 
     db.session.commit()
 
-    # Redirect back to where user came from
-    if filename:
-        return redirect(url_for('read', filename=filename))
+    if file_id:
+        return redirect(url_for('read', file_id=file_id))
     elif source == 'library':
         return redirect(url_for('library'))
     return redirect(url_for('index'))
@@ -340,32 +240,23 @@ def update_meaning():
 @app.route('/library')
 @login_required
 def library():
-    from collections import defaultdict
-
     meanings = Meaning.query.filter_by(user_id=current_user.id).all()
-
     words_by_language_unsorted = defaultdict(list)
     word_meanings = {}
 
     for m in meanings:
         lang = m.language or "Unspecified"
-        words_by_language_unsorted[lang].append({
-            'word': m.word,
-            'meaning': m.meaning
-        })
+        words_by_language_unsorted[lang].append({'word': m.word, 'meaning': m.meaning})
         word_meanings[m.word] = m.meaning
 
-    # Sort languages and words within each language
     words_by_language = {
         lang: sorted(entries, key=lambda x: x['word'])
         for lang, entries in sorted(words_by_language_unsorted.items())
     }
 
-    return render_template(
-        'library.html',
-        words_by_language=words_by_language,
-        word_meanings=word_meanings
-    )
+    return render_template('library.html',
+                           words_by_language=words_by_language,
+                           word_meanings=word_meanings)
 
 @app.route('/remove_word/<word>', methods=['POST'])
 @login_required
@@ -389,9 +280,8 @@ def profile():
 @app.route('/admin')
 @admin_required
 def admin_panel():
-    uploads = Upload.query.all()
+    uploads = File.query.all()
     return render_template('admin.html', uploads=uploads)
 
-# --- Do NOT use db.create_all() when using Flask-Migrate ---
 if __name__ == '__main__':
     app.run(debug=True)

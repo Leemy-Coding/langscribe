@@ -1,6 +1,9 @@
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
+from datetime import datetime
+import uuid
+from sqlalchemy.dialects.postgresql import UUID
 
 db = SQLAlchemy()
 
@@ -13,6 +16,7 @@ class User(UserMixin, db.Model):
 
     meanings = db.relationship('Meaning', backref='user', lazy=True)
     known_words = db.relationship('KnownWord', backref='user', lazy=True)
+    files = db.relationship('File', backref='user', lazy=True)
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -24,19 +28,21 @@ class Meaning(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     word = db.Column(db.String(100), nullable=False)
     meaning = db.Column(db.Text, nullable=False)
-    language = db.Column(db.String(50), nullable=False)  # NEW
+    language = db.Column(db.String(50), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
 class KnownWord(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     word = db.Column(db.String(100), nullable=False)
-    language = db.Column(db.String(50), nullable=False)  # NEW
+    language = db.Column(db.String(50), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
-class Upload(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    filename = db.Column(db.String(200), nullable=False)
-    title = db.Column(db.String(200), nullable=False)
-    author = db.Column(db.String(100), nullable=False)
-    uploader = db.Column(db.String(100), nullable=False)
-    language = db.Column(db.String(50), nullable=True)  # NEW
+class File(db.Model):
+    id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    title = db.Column(db.String(255))
+    author = db.Column(db.String(255))
+    uploader = db.Column(db.String(255))
+    content = db.Column(db.Text, nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    language = db.Column(db.String(50))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
