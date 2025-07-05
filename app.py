@@ -4,6 +4,7 @@ from flask_login import LoginManager, login_user, login_required, logout_user, c
 from werkzeug.utils import secure_filename
 from functools import wraps
 from dotenv import load_dotenv
+from uuid import uuid4
 from docx import Document
 
 import os, re
@@ -46,6 +47,8 @@ ALLOWED_LANGUAGES = [
 
 ALLOWED_REFERRERS = {'library', 'read'}
 
+ALLOWED_EXTENSIONS = {'txt', 'docx'}
+
 # --- Admin Decorator ---
 def admin_required(f):
     @wraps(f)
@@ -61,7 +64,6 @@ def load_user(user_id):
     return db.session.get(User, int(user_id))
 
 # --- Utility Functions ---
-ALLOWED_EXTENSIONS = {'txt', 'docx'}
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
@@ -120,11 +122,20 @@ def logout():
     return redirect(url_for('index'))
 
 @app.route('/community')
+@login_required
 def community():
-    uploads = File.query.all()
-    return render_template('community.html', uploads=uploads, allowed_languages=ALLOWED_LANGUAGES)
+    uploads = File.query.order_by(File.language, File.title).all()
 
-from uuid import uuid4
+    uploads_by_language = {}
+    for upload in uploads:
+        uploads_by_language.setdefault(upload.language, []).append(upload)
+
+    return render_template(
+        'community.html',
+        uploads_by_language=uploads_by_language,
+        allowed_languages=ALLOWED_LANGUAGES,
+        allowed_extension=ALLOWED_EXTENSIONS,
+    )
 
 @app.route('/upload', methods=['POST'])
 @login_required
@@ -174,24 +185,20 @@ def upload():
 @app.route('/read/file/<uuid:id>')
 @login_required
 def read(id):
-    file_entry = File.query.get_or_404(id)
+    file = File.query.get_or_404(id)
+    if not file:
+        abort(404)
 
-    text = file_entry.content
-    words = tokenize(text)
-    word_list = list(dict.fromkeys(words))
-
-    known_words = {w.word for w in current_user.known_words}
-    word_meanings = {m.word: m.meaning for m in current_user.meanings}
+    meanings = Meaning.query.filter_by(user_id=current_user.id, language=file.language).all()
+    word_meanings = {m.word.lower(): m.meaning for m in meanings}
 
     return render_template(
         'read.html',
+        title=file.title,
+        text=file.content,
         id=id,
-        text=text,
-        words=word_list,
-        known_words=known_words,
-        word_meanings=word_meanings,
-        title=file_entry.title,
-        current_language=file_entry.language
+        current_language=file.language,
+        word_meanings=word_meanings
     )
 
 @app.route('/delete_upload/<uuid:upload_id>', methods=['GET', 'POST'])
@@ -203,25 +210,12 @@ def delete_upload(upload_id):
     flash(f"'{file_entry.title}' has been deleted.")
     return redirect(url_for('community'))
 
-@app.route('/mark_known/<word>')
-@login_required
-def mark_known(word):
-    word = word.lower()
-    referrer = request.args.get('referrer')
-    if not KnownWord.query.filter_by(user_id=current_user.id, word=word).first():
-        db.session.add(KnownWord(word=word, user_id=current_user.id))
-        db.session.commit()
-
-    if referrer in ALLOWED_REFERRERS:
-        return redirect(url_for(referrer))
-    return redirect(url_for('index'))
-
 @app.route('/update_meaning', methods=['POST'])
 @login_required
 def update_meaning():
     word = request.form.get('word', '').strip().lower()
     meaning = request.form.get('meaning', '').strip()
-    id = request.form.get('id')
+    file_id = request.form.get('id')
     referrer = request.form.get('referrer')
     language = request.form.get('language', '').strip()
 
@@ -229,23 +223,28 @@ def update_meaning():
         flash("Both word and language are required to save the meaning.", "danger")
         return redirect(request.referrer or url_for('index'))
 
-    existing = Meaning.query.filter_by(user_id=current_user.id, word=word, language=language).first()
-
+    # Save or update meaning
+    existing_meaning = Meaning.query.filter_by(user_id=current_user.id, word=word, language=language).first()
     if meaning:
-        if existing:
-            existing.meaning = meaning
+        if existing_meaning:
+            existing_meaning.meaning = meaning
         else:
             db.session.add(Meaning(word=word, meaning=meaning, language=language, user_id=current_user.id))
-    elif existing:
-        db.session.delete(existing)
+    elif existing_meaning:
+        db.session.delete(existing_meaning)
+
+    # Also mark word as known
+    existing_known = KnownWord.query.filter_by(user_id=current_user.id, word=word, language=language).first()
+    if not existing_known:
+        db.session.add(KnownWord(word=word, language=language, user_id=current_user.id))
 
     db.session.commit()
 
-    if referrer == 'read' and id:
-        return redirect(url_for('read', id=id))
+    # Redirect with anchor to the edited word
+    if referrer == 'read' and file_id:
+        return redirect(url_for('read', id=file_id) + f"#word-{word}")
     elif referrer == 'library':
-        return redirect(url_for('library'))
-
+        return redirect(url_for('library') + f"#word-{word}")
     return redirect(url_for('index'))
 
 @app.route('/library')

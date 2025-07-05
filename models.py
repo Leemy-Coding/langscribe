@@ -37,6 +37,10 @@ class KnownWord(db.Model):
     language = db.Column(db.String(50), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'word', 'language', name='unique_known_word_per_language'),
+    )
+
 class File(db.Model):
     id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     title = db.Column(db.String(255))

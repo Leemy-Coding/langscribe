@@ -7,13 +7,14 @@
 <h2>{{ title }}</h2>
 
 <div class="mt-3 mb-5">
+    {% set text = text or '' %}
     {% for word in text.split() %}
         {% set clean_word = word.strip('.,!?:;"\'()[]') %}
         {% set lower_word = clean_word|lower %}
         {% if lower_word in word_meanings %}
-            <span class="word known-word" title="{{ word_meanings[lower_word] }}" onclick="editWord('{{ lower_word }}')">{{ word }}</span>
+            <span class="known-word" id="word-{{ lower_word }}" onclick="editWord('{{ lower_word }}')">{{ word }}</span>
         {% else %}
-            <span class="word" onclick="editWord('{{ lower_word }}')">{{ word }}</span>
+            <span class="word" id="word-{{ lower_word }}" onclick="editWord('{{ lower_word }}')">{{ word }}</span>
         {% endif %}
     {% endfor %}
 </div>
@@ -59,6 +60,8 @@ function editWord(word) {
     document.getElementById('word-input').value = word;
     document.getElementById('meaning-input').value = meanings[word] || '';
     document.getElementById('meaning-input').focus();
+
+    document.getElementById('editor').scrollIntoView({ behavior: 'smooth' });
 }
 
 function hideEditor() {
