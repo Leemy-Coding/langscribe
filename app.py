@@ -251,32 +251,49 @@ def update_meaning():
 @login_required
 def library():
     meanings = Meaning.query.filter_by(user_id=current_user.id).all()
+
     words_by_language_unsorted = defaultdict(list)
     word_meanings = {}
 
     for m in meanings:
         lang = m.language or "Unspecified"
-        words_by_language_unsorted[lang].append({'word': m.word, 'meaning': m.meaning})
-        word_meanings[m.word] = m.meaning
+        word = m.word.strip().lower()
+
+        words_by_language_unsorted[lang].append({'word': word, 'meaning': m.meaning})
+
+        key = f"{word}:::{lang}"
+        word_meanings[key] = m.meaning
 
     words_by_language = {
         lang: sorted(entries, key=lambda x: x['word'])
         for lang, entries in sorted(words_by_language_unsorted.items())
     }
 
-    return render_template('library.html',
-                           words_by_language=words_by_language,
-                           word_meanings=word_meanings)
+    return render_template(
+        'library.html',
+        words_by_language=words_by_language,
+        word_meanings=word_meanings
+        )
 
 @app.route('/remove_word/<word>', methods=['POST'])
 @login_required
 def remove_word(word):
-    meaning = Meaning.query.filter_by(user_id=current_user.id, word=word).first()
+    language = request.form.get('language', '').strip()
+
+    if not language:
+        flash("Language is required to remove a word.", "danger")
+        return redirect(url_for('library'))
+    
+    word = word.strip().lower()
+
+    meaning = Meaning.query.filter_by(user_id=current_user.id, word=word, language=language).first()
     if meaning:
         db.session.delete(meaning)
-    known = KnownWord.query.filter_by(user_id=current_user.id, word=word).first()
+
+    known = KnownWord.query.filter_by(user_id=current_user.id, word=word, language=language).first()
     if known:
         db.session.delete(known)
+
     db.session.commit()
     return redirect(url_for('library'))
 

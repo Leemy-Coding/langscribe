@@ -23,9 +23,10 @@
                   {{ item.word }}
                 </span>
                 <form method="POST" action="{{ url_for('remove_word', word=item.word) }}" style="display:inline;">
+                  <input type="hidden" name="language" value="{{ language }}">
                   <button type="submit" class="remove-btn" title="Remove word from library" aria-label="Remove {{ item.word }}"
                           style="border:none; background:transparent; color:#dc3545; font-weight:bold; font-size:1.2rem; line-height:1; cursor:pointer; padding:0 4px; margin-left:4px; user-select:none;">
-                    ×
+                    x
                   </button>
                 </form>
               </div>
@@ -59,7 +60,9 @@
       document.getElementById('edit-word').textContent = word;
       document.getElementById('word-input').value = word;
       document.getElementById('language-input').value = language;
-      document.getElementById('meaning-input').value = meanings[word] || '';
+
+      const key = `${word.toLowerCase()}:::${language}`;
+      document.getElementById('meaning-input').value = meanings[key] || '';
       document.getElementById('meaning-input').focus();
     }
 
