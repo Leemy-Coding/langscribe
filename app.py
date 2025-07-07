@@ -145,19 +145,18 @@ def upload():
     author = request.form.get('author', '').strip()
     language = request.form.get('language', '').strip()
     uploader = current_user.username
-    allowed_extensions = ",".join(f".{ext}" for ext in ALLOWED_EXTENSIONS)
 
     if not file or not allowed_file(file.filename):
-        flash("Invalid file type. Only .txt allowed.")
+        flash("Invalid file type. Only .txt, .docx allowed.")
         return redirect(url_for('community'))
     if not title or not author or language not in ALLOWED_LANGUAGES:
-        flash("Please fil out all required fields.")
+        flash("Please fill out all required fields.")
         return redirect(url_for('community'))
 
     try:
         if file.filename.lower().endswith('.txt'):
             content = file.read().decode('utf-8', errors='replace')
-        elif file.filename.lower().endswith('docx'):
+        elif file.filename.lower().endswith('.docx'):
             doc = Document(file)
             content = "\n".join([p.text for p in doc.paragraphs if p.text.strip()])
         else:
@@ -180,7 +179,7 @@ def upload():
     db.session.commit()
 
     flash(f"'{title}' by {author} in ({language}) uploaded by {uploader}!")
-    return redirect(url_for('community'), allowed_extensions)
+    return redirect(url_for('community'))
 
 @app.route('/read/file/<uuid:id>')
 @login_required
