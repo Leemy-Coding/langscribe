@@ -3,43 +3,43 @@
 {% block title %}{{ title }}{% endblock %}
 
 {% block content %}
-<a href="{{ url_for('community') }}" class="btn btn-outline-primary mb-3">← Back to Community</a>
+<a href="{{ url_for('community') }}"  class="btn btn-outline-primary mb-3">⬅️ Back To Community</a>
 <h2>{{ title }}</h2>
 
-<div class="mt-3 mb-5">
-    {% set text = text or '' %}
-    {% for word in text.split() %}
-        {% set clean_word = word.strip('.,!?:;"\'()[]') %}
-        {% set lower_word = clean_word|lower %}
-        {% if lower_word in word_meanings %}
-            <span class="known-word" id="word-{{ lower_word }}" onclick="editWord('{{ lower_word }}')">{{ word }}</span>
-        {% else %}
-            <span class="word" id="word-{{ lower_word }}" onclick="editWord('{{ lower_word }}')">{{ word }}</span>
-        {% endif %}
-    {% endfor %}
-</div>
-
-<!-- Word Meaning Editor -->
-<div id="editor" style="display:none;" class="card p-3">
-    <h5>Edit Meaning for: <span id="edit-word"></span></h5>
-    <form method="POST" action="{{ url_for('update_meaning') }}">
-        <input type="hidden" name="word" id="word-input">
-        <input type="hidden" name="id" value="{{ id }}">
-        <input type="hidden" name="language" value="{{ current_language }}">
-        <input type="hidden" name="referrer" value="read">
-        <textarea name="meaning" id="meaning-input" class="form-control mb-2" rows="2" placeholder="Enter meaning..."></textarea>
-        <button class="btn btn-success" type="submit">Save</button>
-        <button class="btn btn-secondary" type="button" onclick="hideEditor()">Cancel</button>
-    </form>
+<div id="reader-editor-layout" class="d-flex-container">
+    <!-- Left: Text Reader -->
+    <div id="text-reader" class="reader-pane">
+        {% for word in text.split() %}
+            {% set clean_word = word.strip('.,!?:;"/()[]') %}
+            {% set lower_word = clean_word | lower %}
+            {% if lower_word in word_meanings %}
+                <span class="known-word" id="word-{{ loop.index0 }}" onclick="toggleWordSelection(this)">{{ clean_word }}</span>
+            {% else %}
+                <span class="word" id="word-{{ loop.index0 }}" onclick="toggleWordSelection(this)">{{ clean_word }}</span>
+            {% endif %}
+        {% endfor %}
+    </div>
+    <!-- Right: Editors Container -->
+    <div id="editor-container" class="editor-pane">
+        <div style="text-align: center; margin-bottom: 20px;">
+            <button class="btn btn-primary" onclick="openSelectedEditor()">Open An Editor</button>
+        </div>
+        <!-- Dynamic editors will be inserted here -->
+    </div>
 </div>
 
 <style>
+/* === Word Display Styles === */
 .word {
     cursor: pointer;
     padding: 0 2px;
 }
 .word:hover {
     background-color: #f0f0f0;
+}
+.word.selected {
+    background-color: #d9edf7;
+    border-bottom: 2px solid #31708f;
 }
 .known-word {
     background-color: #fff3b0;
@@ -49,23 +49,168 @@
 .known-word:hover {
     background-color: #ffe680;
 }
+.known-word.selected {
+    background-color: #fce5a0;
+    border-bottom: 2px solid #f0ad4e;
+}
+
+/* === Layout for Read + Editors === */
+.d-flex-container {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+    justify-content: space-between;
+}
+
+/* Text Reader Pane */
+.reader-pane {
+    flex: 1;
+    min-width: 0;
+}
+
+/* Editor Pane */
+.editor-pane {
+    flex: 1;
+    min-width: 0;
+    max-width: 50%;
+}
+
+/* === Editor Card Styles === */
+.editor-card {
+    border: 1px solid #ccc;
+    padding: 12px;
+    margin: 12px 0;
+    border-radius: 6px;
+    background-color: #f9f9f9;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    position: relative;
+}
+
+/* Close Button */
+.editor-card .btn-close,
+.editor-card .close-button {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    font-size: 1.2rem;
+    color: #888;
+    background: none;
+    border: none;
+    cursor: pointer;
+}
+.editor-card .btn-close:hover,
+.editor-card .close-button:hover {
+    color: #d9534f;
+}
+
+/* Submit Button Spacing */
+.editor-card button[type="submit"] {
+    margin-top: 8px;
+}
+
+@media (max-width: 768px) {
+    .d-flex-container {
+        flex-direction: column;
+    }
+
+    .editor-pane {
+        max-width: 100%;
+        margin-top: 20px;
+    }
+}
 </style>
 
 <script>
 const meanings = {{ word_meanings | tojson | safe }};
+const editorContainer = document.getElementById('editor-container');
+const openEditors = new Set();
 
-function editWord(word) {
-    document.getElementById('editor').style.display = 'block';
-    document.getElementById('edit-word').textContent = word;
-    document.getElementById('word-input').value = word;
-    document.getElementById('meaning-input').value = meanings[word] || '';
-    document.getElementById('meaning-input').focus();
+let selectedWords = [];
+let selectedElements = [];
 
-    document.getElementById('editor').scrollIntoView({ behavior: 'smooth' });
+// Add or remove a word from selection
+function toggleWordSelection(element) {
+    const word = element.textContent.trim();
+
+    // If already selected, deselect it
+    if (element.classList.contains('selected')) {
+        element.classList.remove('selected');
+        selectedElements = selectedElements.filter(el => el !== element);
+        selectedWords = selectedWords.filter(w => w !== word);
+    } else {
+        // If new selection, add only if it's adjacent to the last one
+        if (selectedElements.length === 0 || areAdjacent(selectedElements[selectedElements.length - 1], element)) {
+            element.classList.add('selected');
+            selectedElements.push(element);
+            selectedWords.push(word);
+        } else {
+            alert("Only adjacent words can be selected.");
+        }
+    }
 }
 
-function hideEditor() {
-    document.getElementById('editor').style.display = 'none';
+// Check if two elements are adjacent based on their IDs
+function areAdjacent(prevEl, currEl) {
+    const prevId = parseInt(prevEl.id.replace('word-', ''));
+    const currId = parseInt(currEl.id.replace('word-', ''));
+    return Math.abs(prevId - currId) === 1;
+}
+
+// Trigger opening an editor for the selected phrase
+function openSelectedEditor() {
+    const phrase = selectedWords.join(' ').trim();
+    if (!phrase) return;
+
+    const language = "{{ current_language }}"; // From Flask context
+    openEditor(phrase, language);
+    clearSelectedWords();
+}
+
+// Open a dynamic editor block
+function openEditor(word, language) {
+    const key = `${word.toLowerCase()}::${language}`;
+    if (openEditors.has(key)) return;
+
+    openEditors.add(key);
+
+    const editorId = `editor-${btoa(key).replace(/=/g, '')}`;
+    const meaning = meanings[word] || '';
+
+    const editorDiv = document.createElement('div');
+    const updateMeaningUrl = "{{ url_for('update_meaning') }}";
+    const referrer = 'read';
+    const fileId = "{{ id }}";
+    editorDiv.className = 'editor-card';
+    editorDiv.id = editorId;
+    editorDiv.innerHTML = `
+        <form method="POST" action="${updateMeaningUrl}">
+            <input type="hidden" name="word" value="${word}">
+            <input type="hidden" name="language" value="${language}">
+            <input type="hidden" name="referrer" value="${referrer}">
+            <input type="hidden" name="id" value="${fileId}">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <strong>${word}</strong> <span class="text-muted">Remove</span>
+                <button type="button" class="btn-close" onclick="removeEditor('${editorId}', '${key}')"></button>
+            </div>
+            <textarea name="meaning" class="form-control mb-2" rows="3">${meaning}</textarea>
+            <button type="submit" class="btn btn-sm btn-success">Save</button>
+        </form>
+    `;
+
+    editorContainer.appendChild(editorDiv);
+}
+
+// Remove a specific editor
+function removeEditor(id, key) {
+    document.getElementById(id)?.remove();
+    openEditors.delete(key);
+}
+
+// Clear all selected word highlights
+function clearSelectedWords() {
+    selectedElements.forEach(el => el.classList.remove('selected'));
+    selectedWords = [];
+    selectedElements = [];
 }
 </script>
 {% endblock %}

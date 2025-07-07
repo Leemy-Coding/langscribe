@@ -241,9 +241,9 @@ def update_meaning():
 
     # Redirect with anchor to the edited word
     if referrer == 'read' and file_id:
-        return redirect(url_for('read', id=file_id) + f"#word-{word}")
+        return redirect(url_for('read', id=file_id))
     elif referrer == 'library':
-        return redirect(url_for('library') + f"#word-{word}")
+        return redirect(url_for('library'))
     return redirect(url_for('index'))
 
 @app.route('/library')
